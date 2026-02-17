@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
+import AppNavbar from '@/components/AppNavbar.vue'
 </script>
 
 <template>
   <div class="app-root">
-    <RouterView />
+    <AppNavbar />
+    <main class="app-main">
+      <RouterView />
+    </main>
   </div>
 </template>
 
@@ -27,7 +31,16 @@ import { RouterView } from 'vue-router'
 }
 
 html, body, #app, .app-root {
-  height: 100%;
+  min-height: 100%;
   margin: 0;
+}
+
+.app-root {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1;
 }
 </style>

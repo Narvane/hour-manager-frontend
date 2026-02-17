@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { fetchProjection } from '@/services/api'
+import { useRouter } from 'vue-router'
+import { fetchProjection, putPeriodAdjustment } from '@/services/api'
 import HourEntryModal from '@/components/HourEntryModal.vue'
 import type { DashboardProjection, DayInWeek } from '@/types/projection'
+
+const router = useRouter()
 
 const projection = ref<DashboardProjection | null>(null)
 const loading = ref(true)
@@ -112,6 +115,26 @@ async function onEntryModalSaved() {
   }
 }
 
+/** Horas ajustadas do período (slider): min 0, max = horas máximas do fechamento. */
+const adjustmentSliderMax = computed(() =>
+  projection.value ? projection.value.totals.availableHoursInPeriod : 0
+)
+const adjustmentSliderValue = computed(() =>
+  projection.value ? projection.value.totals.totalAdjusted : 0
+)
+
+async function onAdjustmentChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  const value = parseFloat(target.value)
+  if (Number.isNaN(value)) return
+  try {
+    const updated = await putPeriodAdjustment(value)
+    if (updated) projection.value = updated
+  } catch (_) {
+    // mantém dados atuais em caso de falha
+  }
+}
+
 /** Horas disponíveis no período (escala da barra de projeção). */
 const projectionAvailableHours = computed(() =>
   projection.value ? projection.value.totals.availableHoursInPeriod : 0
@@ -131,16 +154,31 @@ const projectionEffectiveWorked = computed(() => {
   return (projection.value.totals.totalWorked ?? 0) + (projection.value.totals.totalAdjusted ?? 0)
 })
 
-/** Altura do preenchimento da barra = horas efetivas / horas disponíveis (máx. 100%). */
+/**
+ * Termômetro de ritmo: 100% = no ritmo ou adiantado; cai quando atrasado.
+ * Pressão = ritmo necessário / ritmo esperado; termômetro = min(100%, 100% / pressão).
+ */
 const projectionFillPercent = computed(() => {
-  if (!projection.value || projectionAvailableHours.value <= 0) return 0
-  const p = (projectionEffectiveWorked.value / projectionAvailableHours.value) * 100
-  return Math.min(100, p)
+  if (!projection.value || projectionAvailableHours.value <= 0) return 100
+  const totalDays = projection.value.progress.totalDays ?? 0
+  const daysElapsed = projection.value.progress.daysElapsed ?? 0
+  const daysRemaining = totalDays - daysElapsed
+  if (totalDays <= 0) return 100
+  const expectedRatePerDay = projectionAvailableHours.value / totalDays
+  const hoursRemaining = projectionAvailableHours.value - projectionEffectiveWorked.value
+  const requiredRatePerDay = daysRemaining > 0 ? hoursRemaining / daysRemaining : 0
+  const pressure = expectedRatePerDay > 0 ? requiredRatePerDay / expectedRatePerDay : 0
+  if (pressure <= 0) return 100
+  return Math.min(100, (100 / pressure))
 })
 
 onMounted(async () => {
   try {
     projection.value = await fetchProjection()
+    if (!projection.value && !error.value) {
+      router.replace('/settings')
+      return
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Erro ao carregar projeção'
   } finally {
@@ -222,9 +260,10 @@ onMounted(async () => {
         <h2 class="card-title">Projeção até o fim do período</h2>
         <div class="goal-content">
           <div class="goal-stats">
-            <div class="goal-stat">
-              <span class="goal-stat-label">Ritmo atual</span>
+            <div class="goal-stat" title="Equivalente à jornada trabalhando somente nos dias úteis">
+              <span class="goal-stat-label">Ritmo CLT</span>
               <span class="goal-stat-value">{{ formatHours(projection.goalProjection.currentRatePerDay) }} h/dia</span>
+              <span class="goal-stat-hint">dias úteis</span>
             </div>
             <div class="goal-stat">
               <span class="goal-stat-label">Projeção ao fim</span>
@@ -264,12 +303,28 @@ onMounted(async () => {
               <span>0 h</span>
             </div>
           </div>
-          <p class="projection-bar-caption">Horas trabalhadas — suba até a marca para acompanhar o ritmo do período.</p>
+          <p class="projection-bar-caption">Ritmo do período: 100% = no ritmo ou adiantado; a barra cai quando você está atrasado (e o impacto é maior perto do fim do período).</p>
         </section>
 
         <!-- Barras semanais: [intervalo] bolinhas (dia da semana + número) [barra] -->
         <section class="card weeks-card">
-          <h2 class="card-title">Horas por semana</h2>
+          <div class="card-title-row">
+            <h2 class="card-title">Horas por semana</h2>
+            <div class="adjustment-slider-wrap">
+              <label class="adjustment-slider-label">Ajuste do período</label>
+              <input
+                type="range"
+                class="adjustment-slider"
+                min="0"
+                :max="adjustmentSliderMax"
+                :value="adjustmentSliderValue"
+                step="0.5"
+                title="Horas ajustadas do período (máx. = horas do fechamento)"
+                @change="onAdjustmentChange"
+              />
+              <span class="adjustment-slider-value">{{ formatHours(adjustmentSliderValue) }} h</span>
+            </div>
+          </div>
           <div class="weeks-bars">
             <div
               v-for="(week, i) in projection.weeks"
@@ -410,6 +465,43 @@ onMounted(async () => {
   letter-spacing: 0.04em;
 }
 
+.card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.card-title-row .card-title {
+  margin: 0;
+}
+
+.adjustment-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.adjustment-slider-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.adjustment-slider {
+  width: 120px;
+  height: 6px;
+  accent-color: var(--accent, #d97706);
+}
+
+.adjustment-slider-value {
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  min-width: 3rem;
+}
+
 /* Linha do período */
 .period-line {
   display: flex;
@@ -502,6 +594,13 @@ onMounted(async () => {
   font-size: 1.1rem;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.goal-stat-hint {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted, #6b6b6b);
+  margin-top: 0.15rem;
 }
 
 .goal-status {
