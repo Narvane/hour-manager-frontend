@@ -6,8 +6,6 @@ import { getSystemConfig, saveSystemConfig } from '@/services/api'
 const router = useRouter()
 
 const HOURS_IN_WEEK = 168
-const WORKING_DAYS_PER_WEEK = 5
-const WORKING_HOURS_IN_WEEK = 24 * WORKING_DAYS_PER_WEEK // 120h
 
 const closureStartDay = ref(1)
 const closureEndDay = ref(31)

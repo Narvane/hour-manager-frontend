@@ -9,7 +9,7 @@ const api = axios.create({
 export async function fetchProjection(date?: string): Promise<DashboardProjection | null> {
   const params = date ? { date } : {}
   const res = await api.get<DashboardProjection>('/v1/dashboard/projection', { params })
-  return res.status === 204 || res.data == null || res.data === '' ? null : res.data
+  return res.status === 204 || res.data == null ? null : res.data
 }
 
 export interface HourEntryDto {
@@ -77,7 +77,7 @@ export async function putPeriodAdjustment(adjustedHours: number): Promise<Dashbo
 
 export async function getSystemConfig(): Promise<SystemConfigDto | null> {
   const res = await api.get<SystemConfigDto>('/v1/system-config')
-  return res.status === 204 || res.data == null || res.data === '' ? null : res.data
+  return res.status === 204 || res.data == null ? null : res.data
 }
 
 export async function saveSystemConfig(payload: {

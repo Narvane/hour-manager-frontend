@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchProjection, putPeriodAdjustment } from '@/services/api'
 import HourEntryModal from '@/components/HourEntryModal.vue'
-import type { DashboardProjection, DayInWeek } from '@/types/projection'
+import type { DashboardProjection } from '@/types/projection'
 
 const router = useRouter()
 
@@ -55,12 +55,12 @@ function weekBarTotalHours(week: { weekStart: string; weekEnd: string; totalSegm
 }
 
 /** Horas efetivas da semana = trabalhado (entradas) + ajustes. */
-function weekEffectiveWorked(week: { totalWorked: number; totalAdjusted: number }): number {
+function weekEffectiveWorked(week: { totalWorked: number; totalAdjusted?: number }): number {
   return (week?.totalWorked ?? 0) + (week?.totalAdjusted ?? 0)
 }
 
 /** % do preenchimento da barra em relação ao total (0–100). */
-function weekBarFillPercent(week: { weekStart: string; weekEnd: string; totalWorked: number; totalAdjusted: number }): number {
+function weekBarFillPercent(week: { weekStart: string; weekEnd: string; totalWorked: number; totalAdjusted?: number }): number {
   const total = weekBarTotalHours(week)
   if (total <= 0) return 0
   const filled = weekEffectiveWorked(week)
@@ -82,7 +82,7 @@ function weekShowAvailableMarker(week: { weekStart: string; weekEnd: string; hou
 }
 
 /** Cor/estado da barra: progresso em relação às horas disponíveis; ao passar, cor única. */
-function weekBarFillClass(week: { totalWorked: number; totalAdjusted: number; hoursAvailable: number }): string {
+function weekBarFillClass(week: { totalWorked: number; totalAdjusted?: number; hoursAvailable: number }): string {
   const worked = weekEffectiveWorked(week)
   const available = week.hoursAvailable ?? 0
   if (available <= 0) return 'week-bar-fill--neutral'

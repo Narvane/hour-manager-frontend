@@ -10,10 +10,6 @@ function go(to: string) {
   router.push(to)
 }
 
-function closeMenu() {
-  menuOpen.value = false
-}
-
 function handleClickOutside(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (!target.closest('.navbar') && menuOpen.value) menuOpen.value = false
